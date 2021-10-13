@@ -11,7 +11,7 @@ use Magento\Framework\GraphQl\Exception\GraphQlInputException;
 use Magento\Framework\GraphQl\Query\Resolver\TypeResolverInterface;
 
 /**
- * @inheritdoc
+ * {@inheritdoc}
  */
 class ProductLinkTypeResolverComposite implements TypeResolverInterface
 {
@@ -29,7 +29,8 @@ class ProductLinkTypeResolverComposite implements TypeResolverInterface
     }
 
     /**
-     * @inheritdoc
+     * {@inheritdoc}
+     * @throws GraphQlInputException
      */
     public function resolveType(array $data) : string
     {
@@ -47,6 +48,11 @@ class ProductLinkTypeResolverComposite implements TypeResolverInterface
                 return $resolvedType;
             }
         }
-        throw new GraphQlInputException(__('Cannot resolve type'));
+
+        if (!$resolvedType) {
+            throw new GraphQlInputException(
+                __('Concrete type for %1 not implemented', ['ProductLinksInterface'])
+            );
+        }
     }
 }

@@ -10,16 +10,19 @@ namespace Magento\CatalogGraphQl\Model\Resolver\Product;
 use Magento\Framework\GraphQl\Exception\GraphQlInputException;
 use Magento\Framework\GraphQl\Schema\Type\ResolveInfo;
 use Magento\Catalog\Model\Product;
+use Magento\Catalog\Model\Product\TierPrice;
 use Magento\Framework\GraphQl\Config\Element\Field;
 use Magento\Framework\GraphQl\Query\ResolverInterface;
 
 /**
- * Format the new from and to typo of legacy fields news_from_date and news_to_date
+ * Format a product's tier price information to conform to GraphQL schema representation
+ *
+ * {@inheritdoc}
  */
-class NewFromTo implements ResolverInterface
+class TierPrices implements ResolverInterface
 {
     /**
-     * Transfer data from legacy news_from_date and news_to_date to new names corespondent fields
+     * Format product's tier price data to conform to GraphQL schema
      *
      * {@inheritdoc}
      */
@@ -36,13 +39,16 @@ class NewFromTo implements ResolverInterface
 
         /** @var Product $product */
         $product = $value['model'];
-        $attributeName = substr_replace($field->getName(), 's', 3, 0);
 
-        $data = null;
-        if ($product->getData($attributeName)) {
-            $data = $product->getData($attributeName);
+        $tierPrices = null;
+        if ($product->getTierPrices()) {
+            $tierPrices = [];
+            /** @var TierPrice $tierPrice */
+            foreach ($product->getTierPrices() as $tierPrice) {
+                $tierPrices[] = $tierPrice->getData();
+            }
         }
 
-        return $data;
+        return $tierPrices;
     }
 }

@@ -7,14 +7,10 @@ declare(strict_types=1);
 
 namespace Magento\CatalogGraphQl\Model\Resolver;
 
-use Magento\Catalog\Model\Category;
-use Magento\CatalogGraphQl\Model\Resolver\Category\CheckCategoryIsActive;
-use Magento\CatalogGraphQl\Model\Resolver\Products\DataProvider\ExtractDataFromCategoryTree;
-use Magento\Framework\GraphQl\Config\Element\Field;
-use Magento\Framework\GraphQl\Exception\GraphQlNoSuchEntityException;
-use Magento\Framework\GraphQl\Query\ResolverInterface;
 use Magento\Framework\GraphQl\Schema\Type\ResolveInfo;
-use Magento\CatalogGraphQl\Model\Resolver\Products\DataProvider\CategoryTree as CategoryTreeDataProvider;
+use Magento\Framework\GraphQl\Config\Element\Field;
+use Magento\Framework\GraphQl\Exception\GraphQlInputException;
+use Magento\Framework\GraphQl\Query\ResolverInterface;
 
 /**
  * Category tree field resolver, used for GraphQL request processing.
@@ -27,33 +23,31 @@ class CategoryTree implements ResolverInterface
     const CATEGORY_INTERFACE = 'CategoryInterface';
 
     /**
-     * @var CategoryTreeDataProvider
+     * @var \Magento\CatalogGraphQl\Model\Resolver\Products\DataProvider\CategoryTree
      */
     private $categoryTree;
 
     /**
-     * @var ExtractDataFromCategoryTree
-     */
-    private $extractDataFromCategoryTree;
-
-    /**
-     * @var CheckCategoryIsActive
-     */
-    private $checkCategoryIsActive;
-
-    /**
-     * @param CategoryTreeDataProvider $categoryTree
-     * @param ExtractDataFromCategoryTree $extractDataFromCategoryTree
-     * @param CheckCategoryIsActive $checkCategoryIsActive
+     * @param \Magento\CatalogGraphQl\Model\Resolver\Products\DataProvider\CategoryTree $categoryTree
      */
     public function __construct(
-        CategoryTreeDataProvider $categoryTree,
-        ExtractDataFromCategoryTree $extractDataFromCategoryTree,
-        CheckCategoryIsActive $checkCategoryIsActive
+        \Magento\CatalogGraphQl\Model\Resolver\Products\DataProvider\CategoryTree $categoryTree
     ) {
         $this->categoryTree = $categoryTree;
-        $this->extractDataFromCategoryTree = $extractDataFromCategoryTree;
-        $this->checkCategoryIsActive = $checkCategoryIsActive;
+    }
+
+    /**
+     * @param array $args
+     * @return int
+     * @throws GraphQlInputException
+     */
+    private function getCategoryId(array $args) : int
+    {
+        if (!isset($args['id'])) {
+            throw new GraphQlInputException(__('"id for category should be specified'));
+        }
+
+        return (int)$args['id'];
     }
 
     /**
@@ -65,19 +59,12 @@ class CategoryTree implements ResolverInterface
             return $value[$field->getName()];
         }
 
-        $rootCategoryId = isset($args['id']) ? (int)$args['id'] :
-            (int)$context->getExtensionAttributes()->getStore()->getRootCategoryId();
-
-        if ($rootCategoryId !== Category::TREE_ROOT_ID) {
-            $this->checkCategoryIsActive->execute($rootCategoryId);
-        }
+        $rootCategoryId = $this->getCategoryId($args);
         $categoriesTree = $this->categoryTree->getTree($info, $rootCategoryId);
-
-        if (empty($categoriesTree) || ($categoriesTree->count() == 0)) {
-            throw new GraphQlNoSuchEntityException(__('Category doesn\'t exist'));
+        if (!empty($categoriesTree)) {
+            return current($categoriesTree);
+        } else {
+            return null;
         }
-
-        $result = $this->extractDataFromCategoryTree->execute($categoriesTree);
-        return current($result);
     }
 }

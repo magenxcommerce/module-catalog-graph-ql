@@ -18,7 +18,7 @@ use Magento\CatalogSearch\Model\ResourceModel\Fulltext\Collection\SearchResultAp
 use Magento\Framework\Api\Search\SearchResultInterface;
 use Magento\Framework\Api\SearchCriteriaInterface;
 use Magento\Framework\Api\SearchResultsInterface;
-use Magento\Framework\App\ObjectManager;
+use Magento\GraphQl\Model\Query\ContextInterface;
 
 /**
  * Product field data provider for product search, used for GraphQL resolver processing.
@@ -61,7 +61,7 @@ class ProductSearch
      * @param CollectionProcessorInterface $collectionPreProcessor
      * @param CollectionPostProcessor $collectionPostProcessor
      * @param SearchResultApplierFactory $searchResultsApplierFactory
-     * @param ProductCollectionSearchCriteriaBuilder|null $searchCriteriaBuilder
+     * @param ProductCollectionSearchCriteriaBuilder $searchCriteriaBuilder
      */
     public function __construct(
         CollectionFactory $collectionFactory,
@@ -69,15 +69,14 @@ class ProductSearch
         CollectionProcessorInterface $collectionPreProcessor,
         CollectionPostProcessor $collectionPostProcessor,
         SearchResultApplierFactory $searchResultsApplierFactory,
-        ?ProductCollectionSearchCriteriaBuilder $searchCriteriaBuilder = null
+        ProductCollectionSearchCriteriaBuilder $searchCriteriaBuilder
     ) {
         $this->collectionFactory = $collectionFactory;
         $this->searchResultsFactory = $searchResultsFactory;
         $this->collectionPreProcessor = $collectionPreProcessor;
         $this->collectionPostProcessor = $collectionPostProcessor;
         $this->searchResultApplierFactory = $searchResultsApplierFactory;
-        $this->searchCriteriaBuilder = $searchCriteriaBuilder
-            ?? ObjectManager::getInstance()->get(ProductCollectionSearchCriteriaBuilder::class);
+        $this->searchCriteriaBuilder = $searchCriteriaBuilder;
     }
 
     /**
@@ -86,12 +85,14 @@ class ProductSearch
      * @param SearchCriteriaInterface $searchCriteria
      * @param SearchResultInterface $searchResult
      * @param array $attributes
+     * @param ContextInterface|null $context
      * @return SearchResultsInterface
      */
     public function getList(
         SearchCriteriaInterface $searchCriteria,
         SearchResultInterface $searchResult,
-        array $attributes = []
+        array $attributes = [],
+        ContextInterface $context = null
     ): SearchResultsInterface {
         /** @var Collection $collection */
         $collection = $this->collectionFactory->create();
@@ -105,14 +106,14 @@ class ProductSearch
             $this->getSortOrderArray($searchCriteriaForCollection)
         )->apply();
 
-        $this->collectionPreProcessor->process($collection, $searchCriteriaForCollection, $attributes);
+        $this->collectionPreProcessor->process($collection, $searchCriteriaForCollection, $attributes, $context);
         $collection->load();
         $this->collectionPostProcessor->process($collection, $attributes);
 
         $searchResults = $this->searchResultsFactory->create();
         $searchResults->setSearchCriteria($searchCriteriaForCollection);
         $searchResults->setItems($collection->getItems());
-        $searchResults->setTotalCount($searchResult->getTotalCount());
+        $searchResults->setTotalCount($collection->getSize());
         return $searchResults;
     }
 
@@ -152,6 +153,12 @@ class ProductSearch
         $sortOrders = $searchCriteria->getSortOrders();
         if (is_array($sortOrders)) {
             foreach ($sortOrders as $sortOrder) {
+                // I am replacing _id with entity_id because in ElasticSearch _id is required for sorting by ID.
+                // Where as entity_id is required when using ID as the sort in $collection->load();.
+                // @see \Magento\CatalogGraphQl\Model\Resolver\Products\Query\Search::getResult
+                if ($sortOrder->getField() === '_id') {
+                    $sortOrder->setField('entity_id');
+                }
                 $ordersArray[$sortOrder->getField()] = $sortOrder->getDirection();
             }
         }
